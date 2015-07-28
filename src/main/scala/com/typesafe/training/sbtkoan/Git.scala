@@ -62,6 +62,7 @@ class Git(repository: Repository) {
       .call()
       .toList
       .collect { case entry if matches(entry) => new File(entry.getOldPath) }
+      .filter(_.exists())
   }
 
   def fetch(remote: String, ref: String) =

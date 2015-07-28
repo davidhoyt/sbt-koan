@@ -60,6 +60,8 @@ private class Koan(state: State, koanArg: KoanArg) {
     import KoanArg._
     koanArg match {
       case Show         => show()
+      case Init         => init()
+      case Last         => last()
       case Next         => move(forward = true)
       case Prev         => move(forward = false)
       case Pull(branch) => pull(branch)
@@ -67,7 +69,23 @@ private class Koan(state: State, koanArg: KoanArg) {
   }
 
   def show(): State = {
-    state.log.info(s"Currently at koan '${koanMessages(current)}'")
+    state.log.info(s"Currently at koan ($current) '${koanMessages(current)}'")
+    state
+  }
+
+  def init(): State = {
+    val initialCommit = koans.head
+    val initialCommitMessage = koanMessages(initialCommit)
+    state.log.info(s"Moving to initial koan ($initialCommit): $initialCommitMessage")
+    resetTo(initialCommit)
+    state
+  }
+
+  def last(): State = {
+    val lastCommit = koans.reverse.head
+    val lastCommitMessage = koanMessages(lastCommit)
+    state.log.info(s"Moving to last koan ($lastCommit): $lastCommitMessage")
+    resetTo(lastCommit)
     state
   }
 
@@ -77,7 +95,9 @@ private class Koan(state: State, koanArg: KoanArg) {
         ("next", koans)
       else
         ("previous", koans.reverse)
-    theseKoans.dropWhile(_ != current).filterNot(koanMessages(_).contains(ignoreCommit)) match {
+    val candidates = theseKoans.dropWhile(_ != current).filterNot(koanMessages(_).contains(ignoreCommit))
+    candidates foreach (candidate => state.log.debug(s"Koan candidate ($candidate): ${koanMessages(candidate)}"))
+    candidates match {
       case Nil =>
         state.log.error(s"Can't move to $nextOrPrevious koan, because invalid current id '$current'!")
         state.log.error(s"Hint: Try to delete ${koanProperties.getCanonicalPath} and preferably run `git clean -df`")
@@ -91,17 +111,8 @@ private class Koan(state: State, koanArg: KoanArg) {
         state.log.warn(s"Already arrived at $end!")
         state
       case _ +: other +: _ =>
-        git.checkoutPaths(other, testPath, testPaths: _*)
-        git.deletedOrRenamed(other, current, testPath, testPaths: _*).foreach(FileUtils.forceDelete)
-        val allTestPaths = testPath +: testPaths
-        for (ignoreFile <- ignoreFiles; if allTestPaths.exists(ignoreFile.startsWith)) {
-          val file = new File(baseDirectory, ignoreFile)
-          if (file.exists())
-            file.delete()
-        }
-        git.reset(testPath, testPaths: _*)
-        saveCurrent(other)
-        state.log.info(s"Moved to $nextOrPrevious koan '${koanMessages(other)}'")
+        resetTo(other)
+        state.log.info(s"Moved to $nextOrPrevious koan ($other) '${koanMessages(other)}'")
         state
     }
   }
@@ -137,5 +148,18 @@ private class Koan(state: State, koanArg: KoanArg) {
       properties.store(out, null)
     finally
       out.close()
+  }
+
+  def resetTo(commit: String): Unit = {
+    git.checkoutPaths(commit, testPath, testPaths: _*)
+    git.deletedOrRenamed(commit, current, testPath, testPaths: _*).foreach(FileUtils.forceDelete)
+    val allTestPaths = testPath +: testPaths
+    for (ignoreFile <- ignoreFiles; if allTestPaths.exists(ignoreFile.startsWith)) {
+      val file = new File(baseDirectory, ignoreFile)
+      if (file.exists())
+        file.delete()
+    }
+    git.reset(testPath, testPaths: _*)
+    saveCurrent(commit)
   }
 }

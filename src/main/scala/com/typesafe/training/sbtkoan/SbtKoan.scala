@@ -72,6 +72,6 @@ object SbtKoan extends AutoPlugin {
       (Space ~> name.decapitalize ~> "=" ~> NotQuoted).map(ctor)
     }
 
-    arg(Show) | arg(Next) | arg(Prev) | stringOpt(Pull)
+    arg(Show) | arg(Next) | arg(Prev) | arg(Init) | arg(Last) | stringOpt(Pull)
   }
 }
